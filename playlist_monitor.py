@@ -3,8 +3,8 @@ from datetime import datetime
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 
-SPOTIFY_CLIENT_ID = os.environ["a15bc86f19ae4d9c88f82fb7bc69eea2"]
-SPOTIFY_CLIENT_SECRET = os.environ["43093e64a3d04b27bd83a7717b9fbab0"]
+SPOTIFY_CLIENT_ID = os.environ["SPOTIFY_CLIENT_ID"]
+SPOTIFY_CLIENT_SECRET = os.environ["SPOTIFY_CLIENT_SECRET"]
 SPOTIFY_REDIRECT_URI = "http://127.0.0.1:8888/callback"
 SPOTIFY_SCOPE = "user-read-currently-playing user-read-playback-state"
 
@@ -57,3 +57,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
