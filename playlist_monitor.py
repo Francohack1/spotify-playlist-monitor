@@ -16,19 +16,19 @@ GMAIL_USER = os.environ["GMAIL_USER"]
 GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
 TO_EMAIL = os.environ["TO_EMAIL"]
 
-LAST_PLAYLIST_FILE = "last_playlist.txt"
+LAST_STATE_FILE = "last_state.txt"
 
 
-def get_last_playlist():
-    if not os.path.exists(LAST_PLAYLIST_FILE):
+def get_last_state():
+    if not os.path.exists(LAST_STATE_FILE):
         return None
-    with open(LAST_PLAYLIST_FILE, "r", encoding="utf-8") as f:
+    with open(LAST_STATE_FILE, "r", encoding="utf-8") as f:
         return f.read().strip() or None
 
 
-def save_last_playlist(name: str):
-    with open(LAST_PLAYLIST_FILE, "w", encoding="utf-8") as f:
-        f.write(name or "")
+def save_last_state(value: str):
+    with open(LAST_STATE_FILE, "w", encoding="utf-8") as f:
+        f.write(value or "")
 
 
 def send_email(subject: str, body: str):
@@ -38,7 +38,6 @@ def send_email(subject: str, body: str):
     msg["To"] = TO_EMAIL
 
     context = ssl.create_default_context()
-
     with smtplib.SMTP("smtp.gmail.com", 587) as server:
         server.ehlo()
         server.starttls(context=context)
@@ -62,34 +61,91 @@ def main():
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     current = sp.current_user_playing_track()
-    if not current or not current.get("context"):
-        print(f"[{now}] No hay playlist activa.")
+    if not current or not current.get("item"):
+        print(f"[{now}] No hay reproducción activa.")
         return
 
-    if current["context"].get("type") != "playlist":
-        print(f"[{now}] Reproduciendo pero no desde playlist.")
+    item = current["item"]
+    track_name = item.get("name", "Unknown track")
+    artists = ", ".join(a.get("name", "") for a in item.get("artists", []) if a.get("name")) or "Unknown artist"
+
+    context = current.get("context")
+    last_state = get_last_state()
+
+    # --- CASO 1: SIN CONTEXT ---
+    if not context:
+        # Estado estable: usamos track id si existe, si no nombre
+        track_id = item.get("id") or track_name
+        state_key = f"no_context|track:{track_id}"
+        if state_key == last_state:
+            print(f"[{now}] Sin cambios (sin context).")
+            return
+
+        subject = "[Spotify] Reproducción (sin playlist)"
+        body = (
+            f"Hora: {now}\n"
+            f"Spotify no devolvió 'context' (no se puede saber si es playlist/álbum).\n"
+            f"Canción: {track_name}\n"
+            f"Artista(s): {artists}\n"
+        )
+        send_email(subject, body)
+        save_last_state(state_key)
+        print(f"[{now}] Notificación enviada (sin context).")
         return
 
-    playlist_id = current["context"]["uri"].split(":")[-1]
-    playlist_name = sp.playlist(playlist_id).get("name")
+    ctype = context.get("type")
+    uri = context.get("uri", "")
 
-    if not playlist_name:
-        print(f"[{now}] No pude obtener el nombre de la playlist.")
+    # --- CASO 2: ES PLAYLIST ---
+    if ctype == "playlist" and uri:
+        playlist_id = uri.split(":")[-1]
+        playlist = sp.playlist(playlist_id)
+        playlist_name = playlist.get("name", "Unknown playlist")
+
+        state_key = f"playlist|{playlist_id}"
+        if state_key == last_state:
+            print(f"[{now}] Sin cambios: Playlist {playlist_name}")
+            return
+
+        subject = "[Spotify] Cambio de playlist"
+        body = (
+            f"Hora: {now}\n"
+            f"Playlist: {playlist_name}\n"
+            f"Canción: {track_name}\n"
+            f"Artista(s): {artists}\n"
+        )
+        send_email(subject, body)
+        save_last_state(state_key)
+        print(f"[{now}] Notificación enviada: Playlist {playlist_name}")
         return
 
-    last_playlist = get_last_playlist()
+    # --- CASO 3: NO ES PLAYLIST (álbum, radio, artista, etc.) ---
+    # Creamos un state_key estable por tipo+uri (si no hay uri, fallback a track)
+    stable_id = uri or (item.get("id") or track_name)
+    state_key = f"not_playlist|{ctype}|{stable_id}"
 
-    if playlist_name == last_playlist:
-        print(f"[{now}] Playlist sin cambios: {playlist_name}")
+    if state_key == last_state:
+        print(f"[{now}] Sin cambios: No-playlist ({ctype})")
         return
 
-    print(f"[{now}] CAMBIO DETECTADO → {playlist_name}")
+    # Intentamos agregar info amigable si es álbum
+    source_label = f"Origen: {ctype}"
+    if ctype == "album":
+        album_name = (item.get("album") or {}).get("name")
+        if album_name:
+            source_label = f"Álbum: {album_name}"
 
-    subject = "[Spotify] Cambio de playlist detectado"
-    body = f"Hora: {now}\nAnterior: {last_playlist}\nNueva: {playlist_name}\n"
+    subject = "[Spotify] Reproducción fuera de playlist"
+    body = (
+        f"Hora: {now}\n"
+        f"{source_label}\n"
+        f"Canción: {track_name}\n"
+        f"Artista(s): {artists}\n"
+    )
 
     send_email(subject, body)
-    save_last_playlist(playlist_name)
+    save_last_state(state_key)
+    print(f"[{now}] Notificación enviada: fuera de playlist ({ctype})")
 
 
 if __name__ == "__main__":
