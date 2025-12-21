@@ -67,16 +67,18 @@ def main():
 
     item = current["item"]
     track_name = item.get("name", "Unknown track")
-    artists = ", ".join(a.get("name", "") for a in item.get("artists", []) if a.get("name")) or "Unknown artist"
+    artists = ", ".join(
+        a.get("name", "") for a in item.get("artists", []) if a.get("name")
+    ) or "Unknown artist"
 
     context = current.get("context")
     last_state = get_last_state()
 
     # --- CASO 1: SIN CONTEXT ---
     if not context:
-        # Estado estable: usamos track id si existe, si no nombre
         track_id = item.get("id") or track_name
         state_key = f"no_context|track:{track_id}"
+
         if state_key == last_state:
             print(f"[{now}] Sin cambios (sin context).")
             return
@@ -88,39 +90,49 @@ def main():
             f"Canción: {track_name}\n"
             f"Artista(s): {artists}\n"
         )
+
         send_email(subject, body)
         save_last_state(state_key)
         print(f"[{now}] Notificación enviada (sin context).")
         return
 
     ctype = context.get("type")
-    uri = context.get("uri", "")
+    uri = context.get("uri") or ""
 
     # --- CASO 2: ES PLAYLIST ---
     if ctype == "playlist" and uri:
-        playlist_id = uri.split(":")[-1]
-        playlist = sp.playlist(playlist_id)
-        playlist_name = playlist.get("name", "Unknown playlist")
+        # Usamos URI como identificador estable (evita 404 por playlist_id mal parseado)
+        state_key = f"playlist|{uri}"
 
-        state_key = f"playlist|{playlist_id}"
         if state_key == last_state:
-            print(f"[{now}] Sin cambios: Playlist {playlist_name}")
+            print(f"[{now}] Sin cambios: Playlist {uri}")
             return
+
+        # Intentamos obtener nombre (si falla, usamos el URI)
+        playlist_name = uri
+        try:
+            playlist_id = uri.split(":")[-1]
+            playlist = sp.playlist(playlist_id)
+            playlist_name = playlist.get("name") or uri
+        except Exception as e:
+            print(f"[{now}] No pude resolver nombre de playlist (uso URI). Motivo: {e}")
 
         subject = "[Spotify] Cambio de playlist"
         body = (
             f"Hora: {now}\n"
             f"Playlist: {playlist_name}\n"
+            f"URI: {uri}\n"
             f"Canción: {track_name}\n"
             f"Artista(s): {artists}\n"
         )
+
         send_email(subject, body)
         save_last_state(state_key)
         print(f"[{now}] Notificación enviada: Playlist {playlist_name}")
         return
 
     # --- CASO 3: NO ES PLAYLIST (álbum, radio, artista, etc.) ---
-    # Creamos un state_key estable por tipo+uri (si no hay uri, fallback a track)
+    # Estado estable por tipo + uri (o fallback si no hay uri)
     stable_id = uri or (item.get("id") or track_name)
     state_key = f"not_playlist|{ctype}|{stable_id}"
 
@@ -128,7 +140,7 @@ def main():
         print(f"[{now}] Sin cambios: No-playlist ({ctype})")
         return
 
-    # Intentamos agregar info amigable si es álbum
+    # Etiqueta más amigable
     source_label = f"Origen: {ctype}"
     if ctype == "album":
         album_name = (item.get("album") or {}).get("name")
@@ -141,6 +153,7 @@ def main():
         f"{source_label}\n"
         f"Canción: {track_name}\n"
         f"Artista(s): {artists}\n"
+        f"URI: {uri}\n"
     )
 
     send_email(subject, body)
