@@ -2,7 +2,7 @@ name: Spotify Playlist Monitor
 
 on:
   schedule:
-    - cron: "0 * * * *"   # cada 1 hora
+    - cron: "0 * * * *"
   workflow_dispatch:
 
 jobs:
@@ -19,7 +19,9 @@ jobs:
           path: |
             last_state.txt
             .cache
-          key: spotify-state-v1
+          key: spotify-state-${{ runner.os }}-${{ hashFiles('last_state.txt', '.cache') }}
+          restore-keys: |
+            spotify-state-${{ runner.os }}-
 
       - name: Setup Python
         uses: actions/setup-python@v5
