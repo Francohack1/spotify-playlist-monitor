@@ -103,13 +103,14 @@ def main():
     if ctype == "playlist" and uri:
         # Usamos URI como identificador estable (evita 404 por playlist_id mal parseado)
         state_key = f"playlist|{uri}"
-print(f"[{now}] DEBUG last_state={last_state}")
-print(f"[{now}] DEBUG state_key={state_key}")
 
-if state_key == last_state:
-    print(f"[{now}] Sin cambios: Playlist {uri}")
-    return
+        # DEBUG (dejalo mientras probamos)
+        print(f"[{now}] DEBUG last_state={last_state}")
+        print(f"[{now}] DEBUG state_key={state_key}")
 
+        if state_key == last_state:
+            print(f"[{now}] Sin cambios: Playlist {uri}")
+            return
 
         # Intentamos obtener nombre (si falla, usamos el URI)
         playlist_name = uri
@@ -135,7 +136,6 @@ if state_key == last_state:
         return
 
     # --- CASO 3: NO ES PLAYLIST (álbum, radio, artista, etc.) ---
-    # Estado estable por tipo + uri (o fallback si no hay uri)
     stable_id = uri or (item.get("id") or track_name)
     state_key = f"not_playlist|{ctype}|{stable_id}"
 
@@ -143,7 +143,6 @@ if state_key == last_state:
         print(f"[{now}] Sin cambios: No-playlist ({ctype})")
         return
 
-    # Etiqueta más amigable
     source_label = f"Origen: {ctype}"
     if ctype == "album":
         album_name = (item.get("album") or {}).get("name")
@@ -166,4 +165,3 @@ if state_key == last_state:
 
 if __name__ == "__main__":
     main()
-
