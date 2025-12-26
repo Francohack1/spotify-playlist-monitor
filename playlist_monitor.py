@@ -103,10 +103,13 @@ def main():
     if ctype == "playlist" and uri:
         # Usamos URI como identificador estable (evita 404 por playlist_id mal parseado)
         state_key = f"playlist|{uri}"
+print(f"[{now}] DEBUG last_state={last_state}")
+print(f"[{now}] DEBUG state_key={state_key}")
 
-        if state_key == last_state:
-            print(f"[{now}] Sin cambios: Playlist {uri}")
-            return
+if state_key == last_state:
+    print(f"[{now}] Sin cambios: Playlist {uri}")
+    return
+
 
         # Intentamos obtener nombre (si falla, usamos el URI)
         playlist_name = uri
@@ -163,3 +166,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
