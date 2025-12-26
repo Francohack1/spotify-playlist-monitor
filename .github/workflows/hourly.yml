@@ -19,7 +19,7 @@ jobs:
           path: |
             last_state.txt
             .cache
-          key: spotify-state-${{ runner.os }}-${{ hashFiles('last_state.txt', '.cache') }}
+          key: spotify-state-${{ runner.os }}-${{ github.run_id }}
           restore-keys: |
             spotify-state-${{ runner.os }}-
 
